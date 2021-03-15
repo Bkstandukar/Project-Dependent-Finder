@@ -85,6 +85,11 @@ class DependentFinder:
                 if "0 Repositories" in repo_checker:
 
                     print(f"Could not find Dependent for: {dep_repo}")
+                    DependentFinder.repo_list_dict.append({
+                        "Repos": dep_repo,
+                        "Dependent": "No Dependent"
+                    })
+
                     break
                 else:
                     print("Scrapping Data *****")
