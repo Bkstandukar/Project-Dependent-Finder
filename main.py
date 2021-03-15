@@ -11,10 +11,7 @@ def read_csv(filename):
 
 
 def convert_repo_to_url(repo_list):
-    new_url_list = []
-    for x in repo_list:
-        url = f"https://github.com/{x}/network/dependents"
-        new_url_list.append(url)
+    new_url_list = [f"https://github.com/{x}/network/dependents" for x in repo_list]
     return new_url_list
 
 
