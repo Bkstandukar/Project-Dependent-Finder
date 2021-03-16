@@ -13,3 +13,5 @@ or if you want to run your own csv file, then run the project with:
 python main.py --filename yourcsvfile.csv
 
 But make sure that the csv file is in the same folder as this project.
+
+The output csv will rewrite and replace itself every time the program is run. So make sure to clone the output csv before running the program again.
