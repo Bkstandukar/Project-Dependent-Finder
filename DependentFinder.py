@@ -4,6 +4,7 @@ import time
 import concurrent.futures
 import pandas as pd
 
+
 page_num = 1
 
 
@@ -23,7 +24,7 @@ class DependentFinder:
         '''
         new_data_frame = pd.DataFrame()
         # We can use a with statement to ensure threads are cleaned up promptly
-        with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             # Start the load operations and mark each future with its URL
             future_to_url = {executor.submit(self.dependent_finder, url): url for url in list_urls}
 
@@ -39,7 +40,7 @@ class DependentFinder:
                     new_data_frame = new_data_frame.append(repo_df)
                     uniq_df = new_data_frame.drop_duplicates()
                     uniq_df.to_csv("dependents.csv", index=False)
-        return new_data_frame
+        return DependentFinder.repo_list_dict
 
     def dependent_finder(self, dep_url):
         '''
@@ -48,10 +49,11 @@ class DependentFinder:
         '''
         group_repo = dep_url.split("/")
         dep_repo = f"{group_repo[3]}/{group_repo[4]}"
+        print(dep_repo)
 
-        # print(f"working on {dep_url}")
+        print(f"working on {dep_url}")
         global page_num
-        # print(f"page number: {page_num} of {dep_repo}")
+        print(f"page number: {page_num}")
         print("GET " + dep_url)
         fail_count = 1
 
@@ -60,29 +62,16 @@ class DependentFinder:
                 r = requests.get(dep_url)
                 r.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                if "429" in str(err):
-                    print("handling too many request. **")
-                    backoff_time = ((2 ^ fail_count) - 1) / 2
-                    retry_in = min(backoff_time, 64)
-                    time.sleep(retry_in)
-                    print(f"Retrying in: {retry_in} seconds")
-                    fail_count += 1
-                elif "404" in str(err):
-                    print("Not valid page")
-                    break
-                else:
-                    print(f"other error: {str(err)}")
-                    break
-                # print (err)
+                print(err)
                 DependentFinder.dup_checker.append(dep_repo)
                 dict_info = {
                     "Repos": dep_repo,
                     "Dependent": err
                 }
                 DependentFinder.repo_list_dict.append(dict_info)
-                # break
+                break
             else:
-                soup = BeautifulSoup(r.content, "lxml")
+                soup = BeautifulSoup(r.content, "html.parser")
                 repo_count = '/{}/network/dependents?dependent_type=REPOSITORY'.format(dep_repo)
 
                 repo_list = ["{}".format(
@@ -92,10 +81,10 @@ class DependentFinder:
 
                 # convert list to string and remove space
                 repo_checker = " ".join(''.join(map(str, repo_list)).split())
-                repo_from_url = [int(s) for s in repo_checker.split() if s.isdigit()]
                 # check for repo count
-                if 0 in repo_from_url:
-                    print(f"{dep_repo} has no dependents")
+                if "0 Repositories" in repo_checker:
+
+                    print(f"Could not find Dependent for: {dep_repo}")
                     DependentFinder.repo_list_dict.append({
                         "Repos": dep_repo,
                         "Dependent": "No Dependent"
@@ -103,6 +92,7 @@ class DependentFinder:
 
                     break
                 else:
+                    print("Scrapping Data *****")
                     data = [
                         "{}/{}".format(
                             t.find('a', {"data-repository-hovercards-enabled": ""}).text,
@@ -112,16 +102,16 @@ class DependentFinder:
                     ]
 
                     # this is to give some time delay for server to retrieve data
-                    # data list can never be empty, therefore:
                     if len(data) < 1:
                         print(f"Retrying in: {fail_count} seconds")
                         time.sleep(fail_count)
-                        fail_count *= 2
+                        fail_count += 1
                     else:
                         # create a single list of Dependents
                         for x in data:
                             # avoid circular dependents
                             if dep_repo != x:
+
                                 DependentFinder.repo_list_dict.append({
                                     "Repos": dep_repo,
                                     "Dependent": x
@@ -129,19 +119,19 @@ class DependentFinder:
 
                 pagination_finder = soup.find("div", {"class": "paginate-container"}).find_all('a')
 
-                if len(pagination_finder) > 1:  # among 2 objects (previous and next button), click next button
+                if len(pagination_finder) > 1:
                     pagination_finder = pagination_finder[1]
-                elif not pagination_finder:  # single page have no paginate-container class
+                elif not pagination_finder:
                     break
                 else:
-                    pagination_finder = pagination_finder[0]  # only 1 object (next button) on first page
+                    pagination_finder = pagination_finder[0]
 
-                url = pagination_finder["href"]  # new URl for GET request
+                url = pagination_finder["href"]
 
-                if "dependents_before" in url:  # stop at the last page by checking if the page was already requested before
+                if "dependents_before" in url:
                     break
 
                 else:
-                    page_num += 1  # count page
+                    page_num += 1
                     self.dependent_finder(url)
                 break
